@@ -1,0 +1,5 @@
+node_modules
+build
+watch-sync.ps1
+winscp-watch.bat
+winscp-watch.txt
