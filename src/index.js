@@ -107,15 +107,32 @@ const MultiToolbar = ({blocks}) => {
 	).filter(({name}) => name.match(/^core\//) && !DISABLED_FORMATS.includes(name))
 
 
+	const batchUpdateBlockAttributes = (updates) => {
+		// will be undo-able wit a single Ctrl+Z
+		// thanks to __unstableMarkNextChangeAsNotPersistent
+		let first = true	
+		for (const [clientId, update] of updates) {
+			if (_.isEmpty(update)) { continue }
+			if (first) {
+				updateBlockAttributes(clientId, update) // set the undo point
+				first = false
+			} else {
+				// won't be included in undo history - undo will just roll back
+				// to the last persistent change, i.e. the first update
+				__unstableMarkNextChangeAsNotPersistent()
+				updateBlockAttributes(clientId, update)
+			}
+		}
+	}
+
+
 	const [hasCommonAlign, maybeAlign] = commonAttribute(blocks, 'align')
 	const align = hasCommonAlign ? maybeAlign : null
 	const setAligns = (newAlign) => {
-		for (const [i, block] of blocks.entries()) {
-			if (i > 0) {
-				__unstableMarkNextChangeAsNotPersistent()
-			}
-			updateBlockAttributes(block.clientId, {align: newAlign})
-		}
+		const update = {align: newAlign}
+		batchUpdateBlockAttributes(
+			blocks.map((b) => [b.clientId, update])
+		)
 	}
 	
 	const blockMaybeTexts = blocks.map(({name, attributes}) => {
@@ -153,35 +170,38 @@ const MultiToolbar = ({blocks}) => {
 			return
 		}
 
-		for (let [i, [block, text]] of _.zip(blocks, blockMaybeTexts).entries()) {
-			if (!text) { continue }
-			text = removed.reduce(fmt.removeExactFormat, text)
-			text = fmt.applyFormats(text, added)
-			// console.info('updating', block.clientId, {content: richText.toHTMLString({value: text})}) 
-			const {attribute, ...options} = RICHTEXT_ATTRS[block.name]
-			if (i > 0) {
-				__unstableMarkNextChangeAsNotPersistent()
-			}
-			updateBlockAttributes(block.clientId, {
-				[attribute]: richText.toHTMLString({value: text, ...options})
+		batchUpdateBlockAttributes(
+			_.zip(blocks, blockMaybeTexts)
+			.map(([block, text]) => {
+				if (!text) { return null }
+				text = removed.reduce(fmt.removeExactFormat, text)
+				text = fmt.applyFormats(text, added)
+				// console.info('updating', block.clientId, {content: richText.toHTMLString({value: text})}) 
+				const {attribute, ...options} = RICHTEXT_ATTRS[block.name]
+				return [
+					block.clientId,
+					{ [attribute]: richText.toHTMLString({value: text, ...options}) }
+				]
 			})
-		}
+			.filter(Boolean)
+		)
 	}
 
 	const clearFormatting = () => {
-		for (let [i, [block, text]] of _.zip(blocks, blockMaybeTexts).entries()) {
-			if (!text) { continue }
-			const {attribute, ...options} = RICHTEXT_ATTRS[block.name]
-			const plain = richText.getTextContent(text)
-			text = richTextSelected({text: plain, ...options})
-
-			if (i > 0) {
-				__unstableMarkNextChangeAsNotPersistent()
-			}
-			updateBlockAttributes(block.clientId, {
-				[attribute]: richText.toHTMLString({value: text, ...options})
+		batchUpdateBlockAttributes(
+			_.zip(blocks, blockMaybeTexts)
+			.map(([block, text]) => {
+				if (!text) { return null }
+				const {attribute, ...options} = RICHTEXT_ATTRS[block.name]
+				const plain = richText.getTextContent(text)
+				text = richTextSelected({text: plain, ...options})
+				return [
+					block.clientId,
+					{ [attribute]: richText.toHTMLString({value: text, ...options}) }
+				]
 			})
-		}
+			.filter(Boolean)
+		)
 	}
 
 	return (
@@ -257,7 +277,7 @@ const withMultiToolbar = createHigherOrderComponent((BlockEdit) => (props) => {
 			<BlockEdit {...props} />
 		)
 	}
-	console.info('multi-edit/block-toolbar/render', blocks, blocks.map((b)=>b.clientId), firstId)
+	// console.info('multi-edit/block-toolbar/render', blocks, blocks.map((b)=>b.clientId), firstId)
 	return (
 		<Fragment>
 			<BlockEdit {...props} />
