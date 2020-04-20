@@ -21,6 +21,8 @@
     "rules": {
         "prettier/prettier": ["off"],
         "no-duplicate-imports": "off",
+        "object-shorthand": "warn",
+        "no-nested-ternary": "off",
         "no-console": "warn"
     }
 }

@@ -5,10 +5,9 @@ console.info('multi-edit')
 import {createBlock} from '@wordpress/blocks'
 import {registerPlugin} from '@wordpress/plugins'
 import {PluginBlockSettingsMenuItem} from '@wordpress/edit-post'
+import {Fragment} from '@wordpress/element'
 
 import {useSelect, useDispatch} from '@wordpress/data'
-
-import {Fragment} from '@wordpress/element'
 
 import * as _ from 'lodash'
 
@@ -38,20 +37,20 @@ import {
 import {
 	NavigableToolbar,
 	AlignmentToolbar,
-	BlockControls,
-	BlockFormatControls,
-	RichTextToolbarButton,
+	// BlockControls,
+	// BlockFormatControls,
+	// RichTextToolbarButton,
 } from '@wordpress/block-editor'
 // import {BlockControls} from '@wordpress/editor'
 import {createHigherOrderComponent} from '@wordpress/compose'
-import {useContext, useState} from '@wordpress/element'
+// import {useContext, useState} from '@wordpress/element'
 
-import {__unstableFormatEdit as FormatEdit} from '@wordpress/rich-text'
+// import {__unstableFormatEdit as FormatEdit} from '@wordpress/rich-text'
 import * as richText from '@wordpress/rich-text'
+import * as icons from '@wordpress/icons'
 
-import {FormatToolbar} from './format-toolbar'
 import * as fmt from './format-utils'
-
+// import './formats/indent'
 
 const commonAttribute = (blocks, attr) => {
 	if (blocks.length === 0) { return undefined }
@@ -88,11 +87,44 @@ const RICHTEXT_ATTRS = {
 	// 'core/pullquote':    ['value', 'citations'],
 }
 
-// tricky so let's just disable them for now
-const DISABLED_FORMATS = [
-	'core/image',
-	'core/link',
-]
+
+// simple toggles
+const FORMATS_SIMPLE = {
+	"core/bold": {
+		icon: icons.formatBold,
+		apply: {type: "core/bold"}
+	},
+	"core/italic": {
+		icon: 'editor-italic', // icons.formatItalic,
+		apply: {type: "core/italic"}
+	},
+	"core/code": {
+		icon: icons.code,
+		apply: {type: "core/code"}
+	},
+	"core/strikethrough": {
+		icon: icons.formatStrikethrough,
+		apply: {type: "core/strikethrough"}
+	},
+	"core/underline": {
+		icon: 'editor-underline',
+		apply: {type: "core/underline", attributes: {style: 'text-decoration: underline;'}}
+	},
+}
+
+// more complicated controls
+const FORMATS_ADVANCED = {
+	"core/text-color": {icon: icons.textColor}
+}
+
+const FORMATS_ALL = (
+	Object.keys(FORMATS_SIMPLE) + Object.keys(FORMATS_ADVANCED)
+)
+
+
+
+
+
 
 const MultiToolbar = ({blocks}) => {
 
@@ -104,7 +136,7 @@ const MultiToolbar = ({blocks}) => {
 
 	const coreFormatTypes = useSelect((select) =>
 		select('core/rich-text').getFormatTypes()
-	).filter(({name}) => name.match(/^core\//) && !DISABLED_FORMATS.includes(name))
+	).filter(({name}) => FORMATS_ALL.includes(name))
 
 
 	const batchUpdateBlockAttributes = (updates) => {
@@ -143,40 +175,31 @@ const MultiToolbar = ({blocks}) => {
 	})
 
 	const anyRichTexts = blockMaybeTexts.some(Boolean)
-	let commonFormats, dummyText
+	let commonFormats
 	if (anyRichTexts) {
 		commonFormats = fmt.commonActiveFormats(coreFormatTypes, blockMaybeTexts.filter(Boolean))
-		dummyText = fmt.applyFormats(richTextSelected({text: 'dummy'}), commonFormats)	
 	} else {
 		commonFormats = null
-		dummyText = null
 	}
 	console.info('commonFormats', commonFormats)
 	// console.info('dummyText', dummyText, richText.toHTMLString({value: dummyText}))
 
-	const applyNewFormats = (newDummyText) => {
-		console.info('newDummyText', newDummyText, richText.toHTMLString({value: newDummyText}))
-		// const oldActive = dummyText.activeFormats || []
-		// const newActive = newDummyText.activeFormats || []
-		const oldActive = fmt.activeFormats(coreFormatTypes, dummyText)
-		const newActive = fmt.activeFormats(coreFormatTypes, newDummyText)
 
-		const added   = fmt.formatsSubtract(newActive, oldActive)
-		const removed = fmt.formatsSubtract(oldActive, newActive)
-		console.info('added', added)
-		console.info('removed', removed)
-
-		if (_.isEmpty(added) && _.isEmpty(removed)) {
-			return
-		}
+	const onChangeFormat = ({action, format: formatValue}) => {
+		const updateFormat = (
+			action === "add" ? richText.applyFormat :
+			action === "del" ? (text, {type: formatId}) => richText.removeFormat(text, formatId) :
+				(text, _formatValue) => {
+					console.error('onChangeFormat :: unknown action', {action, format: _formatValue})
+					return text
+				}
+		)
 
 		batchUpdateBlockAttributes(
 			_.zip(blocks, blockMaybeTexts)
 			.map(([block, text]) => {
 				if (!text) { return null }
-				text = removed.reduce(fmt.removeExactFormat, text)
-				text = fmt.applyFormats(text, added)
-				// console.info('updating', block.clientId, {content: richText.toHTMLString({value: text})}) 
+				text = updateFormat(text, formatValue)
 				const {attribute, ...options} = RICHTEXT_ATTRS[block.name]
 				return [
 					block.clientId,
@@ -187,7 +210,7 @@ const MultiToolbar = ({blocks}) => {
 		)
 	}
 
-	const clearFormatting = () => {
+	const onClearFormatting = () => {
 		batchUpdateBlockAttributes(
 			_.zip(blocks, blockMaybeTexts)
 			.map(([block, text]) => {
@@ -203,6 +226,7 @@ const MultiToolbar = ({blocks}) => {
 			.filter(Boolean)
 		)
 	}
+
 
 	return (
 		<Popover
@@ -237,18 +261,16 @@ const MultiToolbar = ({blocks}) => {
 
 				{ anyRichTexts &&
 					<Fragment>
-						<FormatToolbar/>
-						<FormatEdit
-							value={dummyText}
-							formatTypes={coreFormatTypes}
-							onChange={applyNewFormats}
-							onFocus={_.noop}
-						/>
-						<RichTextToolbarButton
-							icon="editor-removeformatting"
-							title="Clear Formatting"
-							onClick={() => clearFormatting()}
-							isActive={false}
+						<FormatToolbar
+							activeFormats={_.fromPairs(commonFormats.map((f)=>[f.type, f]))}
+							onChange={(_active, action) =>
+								onChangeFormat(action)
+							}
+							controls={[{
+								icon: "editor-removeformatting",
+								title: "Clear Formatting",
+								onClick: onClearFormatting,
+							}]}
 						/>
 					</Fragment>
 				}
@@ -257,6 +279,82 @@ const MultiToolbar = ({blocks}) => {
 		</Popover>
 	)
 }
+
+
+
+
+
+import { __ } from '@wordpress/i18n';
+import { DropdownMenu, Button } from '@wordpress/components';
+
+const MORE_FORMATS_POPOVER_PROPS = {
+	position: 'bottom right',
+	isAlternate: true,
+};
+
+const FORMATS_PRIMARY = ['core/bold', 'core/italic', /*'text-color'*/]
+const FORMATS_SECONDARY = (
+	_.difference(Object.keys(FORMATS_SIMPLE), FORMATS_PRIMARY)
+)
+
+const FormatToolbar = ({activeFormats, onChange, controls}) => {
+	const {getFormatType} = useSelect((select) => select('core/rich-text'))
+
+	const formatToggleControl = ({name: formatId, title}) => {
+		const isActive = formatId in activeFormats
+		return {
+			icon: FORMATS_SIMPLE[formatId].icon,
+			title: title,
+			isActive: isActive,
+			onClick: () => {
+				const newIsActive = !isActive
+				const formatValue = FORMATS_SIMPLE[formatId].apply
+				const [newActiveFormats, action] = (
+					newIsActive
+						? [_.set({...activeFormats}, formatId, formatValue),
+						   {action: "add", format: formatValue}]
+						: [_.unset(activeFormats, formatId),
+						   {action: "del", format: formatValue}]
+				)
+				onChange(newActiveFormats, action)
+			}
+		}
+	}
+
+	const FormatToggle = ({formatType}) => {
+		return <Button {...formatToggleControl(formatType)} />
+	}
+
+	return (
+		<div className="block-editor-format-toolbar">
+			<Toolbar>
+				{ FORMATS_PRIMARY.map((formatId) =>
+					<FormatToggle formatType={getFormatType(formatId)} key={formatId}/>
+				  )
+				}
+				<DropdownMenu
+					label={ __('More rich text controls') }
+					icon={icons.chevronDown}
+					controls={
+						[
+							_.sortBy(FORMATS_SECONDARY.map(getFormatType), 'title').map(formatToggleControl),
+							_.sortBy(controls, 'title'),
+						]
+					}
+					popoverProps={MORE_FORMATS_POPOVER_PROPS}
+				/>
+			</Toolbar>
+		</div>
+	);
+};
+
+
+
+
+
+
+
+
 
 
 
@@ -293,6 +391,8 @@ addFilter(
 	withMultiToolbar
 )
 
-const styleNode = document.createElement('style')
-styleNode.innerText = STYLE
-document.head.appendChild(styleNode)
+{
+	const styleNode = document.createElement('style')
+	styleNode.innerText = STYLE
+	document.head.appendChild(styleNode)
+}
