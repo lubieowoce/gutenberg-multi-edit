@@ -50,7 +50,7 @@ import * as richText from '@wordpress/rich-text'
 import * as icons from '@wordpress/icons'
 
 import * as fmt from './format-utils'
-// import './formats/indent'
+import './formats/indent'
 
 const commonAttribute = (blocks, attr) => {
 	if (blocks.length === 0) { return undefined }
