@@ -46,11 +46,11 @@ import {
 import {createHigherOrderComponent} from '@wordpress/compose'
 // import {useContext, useState} from '@wordpress/element'
 
-// import {__unstableFormatEdit as FormatEdit} from '@wordpress/rich-text'
 import * as richText from '@wordpress/rich-text'
-import * as icons from '@wordpress/icons'
+// import * as icons from '@wordpress/icons'
 
 import * as fmt from './format-utils'
+import {FormatToolbar} from './format-toolbar'
 
 
 const commonAttribute = (blocks, attr) => {
@@ -134,9 +134,12 @@ const MultiToolbar = ({blocks}) => {
 		__unstableMarkNextChangeAsNotPersistent,
 	} = useDispatch('core/block-editor')
 
-	const allowedFormatTypes = useSelect((select) =>
+	const allFormatTypes = useSelect((select) =>
 		select('core/rich-text').getFormatTypes()
-	).filter(({name}) => FORMATS_WHITELIST.includes(name))
+	)
+	const allowedFormatTypes = (
+		allFormatTypes.filter(({name}) => FORMATS_WHITELIST.includes(name))
+	)
 
 
 	const batchUpdateBlockAttributes = (updates) => {
@@ -257,6 +260,7 @@ const MultiToolbar = ({blocks}) => {
 				{ anyRichTexts &&
 					<Fragment>
 						<FormatToolbar
+							formatTypes={allowedFormatTypes}
 							activeFormats={_.fromPairs(commonFormats.map((f)=>[f.type, f]))}
 							onTransformReady={onTransformReady}
 							controls={[{
@@ -272,93 +276,6 @@ const MultiToolbar = ({blocks}) => {
 		</Popover>
 	)
 }
-
-
-
-
-
-import { __ } from '@wordpress/i18n';
-import { DropdownMenu, Button, Slot } from '@wordpress/components';
-
-const MORE_FORMATS_POPOVER_PROPS = {
-	position: 'bottom right',
-	isAlternate: true,
-};
-
-const FORMATS_PRIMARY = ['core/bold', 'core/italic', 'core/text-color']
-
-const FormatToolbar = ({activeFormats, onTransformReady, controls: extraControls}) => {
-	const {getFormatType} = useSelect((select) => select('core/rich-text'))
-
-	return (
-		<div className="block-editor-format-toolbar">
-			<Toolbar>
-				{
-					// instantiate the controls that use RichTextToolbarButton
-					// i.e. the 'RichText.ToolbarControls' fill
-					// the slot is provided right below
-					FORMATS_TRANSFORMS.map((formatId) => {
-						const formatType = getFormatType(formatId)
-						if (!formatType) { return null }
-						const isActive = formatId in activeFormats
-						const activeAttributes = isActive ? (activeFormats[formatId].attributes || {}) : {}
-						// eslint-disable-next-line @wordpress/no-unused-vars-before-return
-						const {getTransform: GetTransform} = formatType
-						return (
-							<GetTransform
-								formatId={formatId}
-								key={formatId}
-								isActive={isActive}
-								activeAttributes={activeAttributes}
-								onTransformReady={onTransformReady}
-							/>
-						)
-					  }).map((el, i) => {console.info('GetTransform', i, el); return el})
-				}
-				{
-					// FORMATS PRIMARY use a different slot name so that they can
-					// appear in the bar instead of the dropdown 
-					FORMATS_PRIMARY.map(
-						(format) => (
-							<Slot
-								name={`RichText.ToolbarControls.${format.replace('core/', '')}`}
-								key={format}
-							/>
-						)
-					)
-				}
-				<Slot name="RichText.ToolbarControls">
-					{ (fills) => {
-						console.info('fills:', fills)
-						// these are the `RichTextToolbarButton`s the formats' `GetTransform`s returned  
-						const controlsFromFills = fills.map(([{props}]) => props)
-
-						return (
-							<Fragment>
-								<DropdownMenu
-									label={__('More rich text controls')}
-									icon={icons.chevronDown}
-									controls={
-										[
-											_.sortBy(controlsFromFills, 'title'),
-											_.sortBy(extraControls, 'title'),
-										]
-									}
-									popoverProps={MORE_FORMATS_POPOVER_PROPS}
-								/>
-							</Fragment>
-						)
-					}}
-				</Slot>
-
-			</Toolbar>
-		</div>
-	);
-};
-
-
-
-
 
 
 
