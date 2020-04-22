@@ -44,6 +44,46 @@ const clear = (value) => {
 	return richText.removeFormat(value, NAME, start, end)
 }
 
+
+const GetTransform = ({onTransformReady, isActive, activeAttributes}) => {
+	return (
+		<Fragment>
+			<RichTextToolbarButton
+				icon={iconIndent}
+				title={`${TITLE}: Increase`}
+				isActive={isActive}
+				onClick={() => {
+					const transform = (value) => apply(value, activeAttributes || {}, 1)
+					onTransformReady(transform)
+				}}
+			/>
+			{isActive && (
+				<RichTextToolbarButton
+					icon={iconOutdent}
+					title={`${TITLE}: Decrease`}
+					isActive={isActive}
+					onClick={() => {
+						const transform = (value) => apply(value, activeAttributes || {}, -1)
+						onTransformReady(transform)
+					}}
+				/>
+			)}
+			{isActive && (
+				<RichTextToolbarButton
+					icon={iconOutdent}
+					title={`${TITLE}: Clear`}
+					onClick={() => {
+						const transform = (value) => clear(value)
+						onTransformReady(transform)
+					}}
+				/>
+			)}
+		</Fragment>
+	)
+}
+
+
+
 const SETTINGS = {
 	title: TITLE,
 
@@ -56,43 +96,13 @@ const SETTINGS = {
 		'style': 'style',
 	},
 	
-	edit: ({value, onChange, isActive, activeAttributes}) => {
-		// if (!isActive) { return null }
-		return (
-			<Fragment>
-				<RichTextToolbarButton
-					icon={iconIndent}
-					title={`${TITLE}: Increase`}
-					isActive={isActive}
-					onClick={() => {
-						const newValue = apply(value, activeAttributes || {}, 1)
-						onChange(newValue)
-					}}
-				/>
-				{isActive && (
-					<RichTextToolbarButton
-						icon={iconOutdent}
-						title={`${TITLE}: Decrease`}
-						isActive={isActive}
-						onClick={() => {
-							const newValue = apply(value, activeAttributes || {}, -1)
-							onChange(newValue)
-						}}
-					/>
-				)}
-				{isActive && (
-					<RichTextToolbarButton
-						icon={iconOutdent}
-						title={`${TITLE}: Clear`}
-						onClick={() => {
-							const newValue = clear(value)
-							onChange(newValue)
-						}}
-					/>
-				)}
-			</Fragment>
-		)
-	}
+	edit: ({value, onChange, ...props}) => (
+		<GetTransform
+			onTransformReady={(transform) => onChange(transform(value))}
+			{...props}
+		/>
+	),
+	getTransform: GetTransform,
 }
 
 registerFormatType(NAME, SETTINGS)

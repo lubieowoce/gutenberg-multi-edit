@@ -11,6 +11,7 @@ import {useSelect, useDispatch} from '@wordpress/data'
 
 import * as _ from 'lodash'
 
+// import './misc/wp-icons-explorer'
 
 const mergeParagraphs = (paragraphs, {replaceBlocks}) => {
 	const ids = paragraphs.map((b) => b.clientId)
@@ -50,7 +51,7 @@ import * as richText from '@wordpress/rich-text'
 import * as icons from '@wordpress/icons'
 
 import * as fmt from './format-utils'
-import './formats/indent'
+
 
 const commonAttribute = (blocks, attr) => {
 	if (blocks.length === 0) { return undefined }
@@ -112,13 +113,34 @@ const FORMATS_SIMPLE = {
 	},
 }
 
-// more complicated controls
-const FORMATS_ADVANCED = {
-	"core/text-color": {icon: icons.textColor}
-}
 
-const FORMATS_ALL = (
-	Object.keys(FORMATS_SIMPLE) + Object.keys(FORMATS_ADVANCED)
+import './formats/indent'
+import {reregisterWithTransform} from './formats/transform-wrapper'
+// import {domReady} from '@wordpress/element'
+
+const FORMATS_WRAP = [
+	"core/text-color",
+	"editorskit/background",
+	"editorskit/subscript",
+	"editorskit/superscript",
+	"editorskit/uppercase",
+	// "editorskit/charmap",
+]
+
+window.wp.domReady(() => {
+	FORMATS_WRAP.forEach(reregisterWithTransform)
+})
+
+
+const FORMATS_TRANSFORMS = [
+	"custom/indent",
+ 	...FORMATS_WRAP
+]
+
+
+const FORMATS_WHITELIST = _.concat(
+	Object.keys(FORMATS_SIMPLE),
+	FORMATS_TRANSFORMS
 )
 
 
@@ -136,7 +158,7 @@ const MultiToolbar = ({blocks}) => {
 
 	const coreFormatTypes = useSelect((select) =>
 		select('core/rich-text').getFormatTypes()
-	).filter(({name}) => FORMATS_ALL.includes(name))
+	).filter(({name}) => FORMATS_WHITELIST.includes(name))
 
 
 	const batchUpdateBlockAttributes = (updates) => {
@@ -184,7 +206,6 @@ const MultiToolbar = ({blocks}) => {
 	console.info('commonFormats', commonFormats)
 	// console.info('dummyText', dummyText, richText.toHTMLString({value: dummyText}))
 
-
 	const onChangeFormat = ({action, format: formatValue}) => {
 		const updateFormat = (
 			action === "add" ? richText.applyFormat :
@@ -210,12 +231,32 @@ const MultiToolbar = ({blocks}) => {
 		)
 	}
 
+	const onTransformReady = (transform) => {
+		batchUpdateBlockAttributes(
+			_.zip(blocks, blockMaybeTexts)
+			.map(([block, text]) => {
+				if (!text) { return null }
+				text = transform(text)
+				const {attribute, ...options} = RICHTEXT_ATTRS[block.name]
+				return [
+					block.clientId,
+					{ [attribute]: richText.toHTMLString({value: text, ...options}) }
+				]
+			})
+			.filter(Boolean)
+		)
+	}
+
 	const onClearFormatting = () => {
 		batchUpdateBlockAttributes(
 			_.zip(blocks, blockMaybeTexts)
 			.map(([block, text]) => {
 				if (!text) { return null }
 				const {attribute, ...options} = RICHTEXT_ATTRS[block.name]
+				// TODO:
+				// keep replacement objects like links - they're not really formatting.
+				// could be done by looping over all formats
+				// and removing the ones that don't have a .object property
 				const plain = richText.getTextContent(text)
 				text = richTextSelected({text: plain, ...options})
 				return [
@@ -266,6 +307,7 @@ const MultiToolbar = ({blocks}) => {
 							onChange={(_active, action) =>
 								onChangeFormat(action)
 							}
+							onTransformReady={onTransformReady}
 							controls={[{
 								icon: "editor-removeformatting",
 								title: "Clear Formatting",
@@ -285,7 +327,7 @@ const MultiToolbar = ({blocks}) => {
 
 
 import { __ } from '@wordpress/i18n';
-import { DropdownMenu, Button } from '@wordpress/components';
+import { DropdownMenu, Button, Slot } from '@wordpress/components';
 
 const MORE_FORMATS_POPOVER_PROPS = {
 	position: 'bottom right',
@@ -297,7 +339,7 @@ const FORMATS_SECONDARY = (
 	_.difference(Object.keys(FORMATS_SIMPLE), FORMATS_PRIMARY)
 )
 
-const FormatToolbar = ({activeFormats, onChange, controls}) => {
+const FormatToolbar = ({activeFormats, onChange, onTransformReady, controls}) => {
 	const {getFormatType} = useSelect((select) => select('core/rich-text'))
 
 	const formatToggleControl = ({name: formatId, title}) => {
@@ -325,6 +367,7 @@ const FormatToolbar = ({activeFormats, onChange, controls}) => {
 		return <Button {...formatToggleControl(formatType)} />
 	}
 
+
 	return (
 		<div className="block-editor-format-toolbar">
 			<Toolbar>
@@ -332,17 +375,50 @@ const FormatToolbar = ({activeFormats, onChange, controls}) => {
 					<FormatToggle formatType={getFormatType(formatId)} key={formatId}/>
 				  )
 				}
-				<DropdownMenu
-					label={ __('More rich text controls') }
-					icon={icons.chevronDown}
-					controls={
-						[
-							_.sortBy(FORMATS_SECONDARY.map(getFormatType), 'title').map(formatToggleControl),
-							_.sortBy(controls, 'title'),
-						]
-					}
-					popoverProps={MORE_FORMATS_POPOVER_PROPS}
-				/>
+
+				{
+					// instantiate the controls that use RichTextToolbarButton
+					// i.e. the 'RichText.ToolbarControls' fill
+					// the slot is provided right below
+					FORMATS_TRANSFORMS.map((formatId) => {
+						const formatType = getFormatType(formatId)
+						if (!formatType) { return null }
+						const isActive = formatId in activeFormats
+						const activeAttributes = isActive ? (activeFormats[formatId].attributes || {}) : {}
+						// eslint-disable-next-line @wordpress/no-unused-vars-before-return
+						const {getTransform: GetTransform} = formatType
+						return (
+							<GetTransform
+								key={formatId}
+								isActive={isActive}
+								activeAttributes={activeAttributes}
+								onTransformReady={onTransformReady}
+							/>
+						)
+					  }).map((el, i) => {console.info('GetTransform', i, el); return el})
+				}
+				<Slot name="RichText.ToolbarControls">
+					{ (fills) => {
+						console.info('fills:', fills)
+						// these are the `RichTextToolbarButton`s the formats' `GetTransform`s returned  
+						const controlsFromFills = fills.map(([{props}]) => props)
+						return (
+							<DropdownMenu
+								label={__('More rich text controls')}
+								icon={icons.chevronDown}
+								controls={
+									[
+										_.sortBy(FORMATS_SECONDARY.map(getFormatType).filter(Boolean), 'title').map(formatToggleControl),
+										_.sortBy(controlsFromFills, 'title'),
+										_.sortBy(controls, 'title'),
+									]
+								}
+								popoverProps={MORE_FORMATS_POPOVER_PROPS}
+							/>
+						)
+					}}
+				</Slot>
+
 			</Toolbar>
 		</div>
 	);
