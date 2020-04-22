@@ -89,36 +89,15 @@ const RICHTEXT_ATTRS = {
 }
 
 
-// simple toggles
-const FORMATS_SIMPLE = {
-	"core/bold": {
-		icon: icons.formatBold,
-		apply: {type: "core/bold"}
-	},
-	"core/italic": {
-		icon: 'editor-italic', // icons.formatItalic,
-		apply: {type: "core/italic"}
-	},
-	"core/code": {
-		icon: icons.code,
-		apply: {type: "core/code"}
-	},
-	"core/strikethrough": {
-		icon: icons.formatStrikethrough,
-		apply: {type: "core/strikethrough"}
-	},
-	"core/underline": {
-		icon: 'editor-underline',
-		apply: {type: "core/underline", attributes: {style: 'text-decoration: underline;'}}
-	},
-}
-
-
-import './formats/indent'
 import {reregisterWithTransform} from './formats/transform-wrapper'
-// import {domReady} from '@wordpress/element'
+import './formats/indent'
 
 const FORMATS_WRAP = [
+	"core/bold",
+	"core/italic",
+	"core/code",
+	"core/strikethrough",
+	"core/underline",
 	"core/text-color",
 	"editorskit/background",
 	"editorskit/subscript",
@@ -133,15 +112,14 @@ window.wp.domReady(() => {
 
 
 const FORMATS_TRANSFORMS = [
+ 	...FORMATS_WRAP,
 	"custom/indent",
- 	...FORMATS_WRAP
 ]
 
 
-const FORMATS_WHITELIST = _.concat(
-	Object.keys(FORMATS_SIMPLE),
-	FORMATS_TRANSFORMS
-)
+const FORMATS_WHITELIST = [
+	...FORMATS_TRANSFORMS
+]
 
 
 
@@ -156,7 +134,7 @@ const MultiToolbar = ({blocks}) => {
 		__unstableMarkNextChangeAsNotPersistent,
 	} = useDispatch('core/block-editor')
 
-	const coreFormatTypes = useSelect((select) =>
+	const allowedFormatTypes = useSelect((select) =>
 		select('core/rich-text').getFormatTypes()
 	).filter(({name}) => FORMATS_WHITELIST.includes(name))
 
@@ -179,6 +157,7 @@ const MultiToolbar = ({blocks}) => {
 		}
 	}
 
+	// TODO: recurse into innerBlocks
 
 	const [hasCommonAlign, maybeAlign] = commonAttribute(blocks, 'align')
 	const align = hasCommonAlign ? maybeAlign : null
@@ -199,37 +178,12 @@ const MultiToolbar = ({blocks}) => {
 	const anyRichTexts = blockMaybeTexts.some(Boolean)
 	let commonFormats
 	if (anyRichTexts) {
-		commonFormats = fmt.commonActiveFormats(coreFormatTypes, blockMaybeTexts.filter(Boolean))
+		commonFormats = fmt.commonActiveFormats(allowedFormatTypes, blockMaybeTexts.filter(Boolean))
 	} else {
 		commonFormats = null
 	}
 	console.info('commonFormats', commonFormats)
 	// console.info('dummyText', dummyText, richText.toHTMLString({value: dummyText}))
-
-	const onChangeFormat = ({action, format: formatValue}) => {
-		const updateFormat = (
-			action === "add" ? richText.applyFormat :
-			action === "del" ? (text, {type: formatId}) => richText.removeFormat(text, formatId) :
-				(text, _formatValue) => {
-					console.error('onChangeFormat :: unknown action', {action, format: _formatValue})
-					return text
-				}
-		)
-
-		batchUpdateBlockAttributes(
-			_.zip(blocks, blockMaybeTexts)
-			.map(([block, text]) => {
-				if (!text) { return null }
-				text = updateFormat(text, formatValue)
-				const {attribute, ...options} = RICHTEXT_ATTRS[block.name]
-				return [
-					block.clientId,
-					{ [attribute]: richText.toHTMLString({value: text, ...options}) }
-				]
-			})
-			.filter(Boolean)
-		)
-	}
 
 	const onTransformReady = (transform) => {
 		batchUpdateBlockAttributes(
@@ -304,9 +258,6 @@ const MultiToolbar = ({blocks}) => {
 					<Fragment>
 						<FormatToolbar
 							activeFormats={_.fromPairs(commonFormats.map((f)=>[f.type, f]))}
-							onChange={(_active, action) =>
-								onChangeFormat(action)
-							}
 							onTransformReady={onTransformReady}
 							controls={[{
 								icon: "editor-removeformatting",
@@ -334,48 +285,14 @@ const MORE_FORMATS_POPOVER_PROPS = {
 	isAlternate: true,
 };
 
-const FORMATS_PRIMARY = ['core/bold', 'core/italic', /*'text-color'*/]
-const FORMATS_SECONDARY = (
-	_.difference(Object.keys(FORMATS_SIMPLE), FORMATS_PRIMARY)
-)
+const FORMATS_PRIMARY = ['core/bold', 'core/italic', 'core/text-color']
 
-const FormatToolbar = ({activeFormats, onChange, onTransformReady, controls}) => {
+const FormatToolbar = ({activeFormats, onTransformReady, controls: extraControls}) => {
 	const {getFormatType} = useSelect((select) => select('core/rich-text'))
-
-	const formatToggleControl = ({name: formatId, title}) => {
-		const isActive = formatId in activeFormats
-		return {
-			icon: FORMATS_SIMPLE[formatId].icon,
-			title: title,
-			isActive: isActive,
-			onClick: () => {
-				const newIsActive = !isActive
-				const formatValue = FORMATS_SIMPLE[formatId].apply
-				const [newActiveFormats, action] = (
-					newIsActive
-						? [_.set({...activeFormats}, formatId, formatValue),
-						   {action: "add", format: formatValue}]
-						: [_.unset(activeFormats, formatId),
-						   {action: "del", format: formatValue}]
-				)
-				onChange(newActiveFormats, action)
-			}
-		}
-	}
-
-	const FormatToggle = ({formatType}) => {
-		return <Button {...formatToggleControl(formatType)} />
-	}
-
 
 	return (
 		<div className="block-editor-format-toolbar">
 			<Toolbar>
-				{ FORMATS_PRIMARY.map((formatId) =>
-					<FormatToggle formatType={getFormatType(formatId)} key={formatId}/>
-				  )
-				}
-
 				{
 					// instantiate the controls that use RichTextToolbarButton
 					// i.e. the 'RichText.ToolbarControls' fill
@@ -389,6 +306,7 @@ const FormatToolbar = ({activeFormats, onChange, onTransformReady, controls}) =>
 						const {getTransform: GetTransform} = formatType
 						return (
 							<GetTransform
+								formatId={formatId}
 								key={formatId}
 								isActive={isActive}
 								activeAttributes={activeAttributes}
@@ -397,24 +315,38 @@ const FormatToolbar = ({activeFormats, onChange, onTransformReady, controls}) =>
 						)
 					  }).map((el, i) => {console.info('GetTransform', i, el); return el})
 				}
+				{
+					// FORMATS PRIMARY use a different slot name so that they can
+					// appear in the bar instead of the dropdown 
+					FORMATS_PRIMARY.map(
+						(format) => (
+							<Slot
+								name={`RichText.ToolbarControls.${format.replace('core/', '')}`}
+								key={format}
+							/>
+						)
+					)
+				}
 				<Slot name="RichText.ToolbarControls">
 					{ (fills) => {
 						console.info('fills:', fills)
 						// these are the `RichTextToolbarButton`s the formats' `GetTransform`s returned  
 						const controlsFromFills = fills.map(([{props}]) => props)
+
 						return (
-							<DropdownMenu
-								label={__('More rich text controls')}
-								icon={icons.chevronDown}
-								controls={
-									[
-										_.sortBy(FORMATS_SECONDARY.map(getFormatType).filter(Boolean), 'title').map(formatToggleControl),
-										_.sortBy(controlsFromFills, 'title'),
-										_.sortBy(controls, 'title'),
-									]
-								}
-								popoverProps={MORE_FORMATS_POPOVER_PROPS}
-							/>
+							<Fragment>
+								<DropdownMenu
+									label={__('More rich text controls')}
+									icon={icons.chevronDown}
+									controls={
+										[
+											_.sortBy(controlsFromFills, 'title'),
+											_.sortBy(extraControls, 'title'),
+										]
+									}
+									popoverProps={MORE_FORMATS_POPOVER_PROPS}
+								/>
+							</Fragment>
 						)
 					}}
 				</Slot>
