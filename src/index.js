@@ -341,8 +341,9 @@ const MultiEditPlugin = () => {
 	)
 	useEffect(() => {
 		console.info('transforming formats', registeredFormatTypes)
+		const formatTypes = _.fromPairs(registeredFormatTypes.map((f) => [f.name, f]))
 		FORMATS_WRAP.forEach((f) =>
-			reregisterWithTransform(f, registeredFormatTypes)
+			reregisterWithTransform(f, formatTypes)
 		)
 	}, [registeredFormatTypes]) // relying on reference equality (createSelector)
 
