@@ -38,7 +38,7 @@ import {
 import {
 	NavigableToolbar,
 	AlignmentToolbar,
-	// BlockControls,
+	BlockControls,
 	// BlockFormatControls,
 	// RichTextToolbarButton,
 } from '@wordpress/block-editor'
@@ -53,13 +53,13 @@ import * as fmt from './format-utils'
 import {FormatToolbar} from './format-toolbar'
 
 
-const commonAttribute = (blocks, attr) => {
+const commonAttribute = (blocks, attrPath) => {
 	if (blocks.length === 0) { return undefined }
 
 	let [block,] = blocks
-	const common = block.attributes[attr]
+	const common = _.get(block, attrPath)
 	for (block of blocks) {
-		if (block.attributes[attr] !== common) {
+		if (_.get(block, attrPath) !== common) {
 			return [false, null]
 		}
 	}
@@ -106,10 +106,6 @@ const FORMATS_WRAP = [
 	// "editorskit/charmap",
 ]
 
-window.wp.domReady(() => {
-	FORMATS_WRAP.forEach(reregisterWithTransform)
-})
-
 
 const FORMATS_TRANSFORMS = [
  	...FORMATS_WRAP,
@@ -123,6 +119,7 @@ const FORMATS_WHITELIST = [
 
 
 
+import {BlockEdit} from '@wordpress/block-editor'
 
 
 
@@ -162,7 +159,54 @@ const MultiToolbar = ({blocks}) => {
 
 	// TODO: recurse into innerBlocks
 
-	const [hasCommonAlign, maybeAlign] = commonAttribute(blocks, 'align')
+	console.info(blocks)
+	const [hasCommonName, maybeName] = commonAttribute(blocks, 'name')
+	let dummyBlock, blockEdit
+	if (hasCommonName) {
+		const name = maybeName
+		const dummyAttrs = _.cloneDeep(blocks[0].attributes)
+		const allAttrs = blocks.map((b) => b.attributes)
+		const allAttrNames = _.union(allAttrs.map(Object.keys))
+		for (const attr of allAttrNames) {
+			const [hasCommon, common] = commonAttribute(allAttrs, attr)
+			if (hasCommon) {
+				dummyAttrs[attr] = common
+			} else {
+				delete dummyAttrs[attr]
+			}
+		}
+		// dummyBlock = createBlock(name, dummyAttrs)
+		dummyBlock = blocks[0]
+		console.info('dummyAttrs', dummyAttrs)
+
+		blockEdit = (
+			<BlockEdit
+				isFakeBlockEdit={true}
+				name={ name }
+				isSelected={ true }
+				attributes={ dummyAttrs }
+				setAttributes={ (update) => batchUpdateBlockAttributes(blocks.map(({clientId}) => [clientId, update])) }
+				// insertBlocksAfter={ isLocked ? undefined : onInsertBlocksAfter }
+				// onReplace={ isLocked ? undefined : onReplace }
+				// mergeBlocks={ isLocked ? undefined : onMerge }
+				clientId={ dummyBlock.clientId }
+				isSelectionEnabled={ false }
+				toggleSelection={ _.noop }
+			/>
+		)
+		console.info('dummyBlock', dummyBlock)
+		console.info('dummyBlock (get)', wp.data.select('core/block-editor').getBlock(dummyBlock.clientId))
+		console.info('blockEdit', blockEdit)
+		blockEdit = <div style={ { display: 'none' } }>{ blockEdit }</div>;
+	} else {
+		dummyBlock = null
+		blockEdit = null
+		console.info('dummyBlock', dummyBlock)
+		console.info('blockEdit', blockEdit)
+	}
+
+
+	const [hasCommonAlign, maybeAlign] = commonAttribute(blocks, ['attributes', 'align'])
 	const align = hasCommonAlign ? maybeAlign : null
 	const setAligns = (newAlign) => {
 		const update = {align: newAlign}
@@ -185,7 +229,7 @@ const MultiToolbar = ({blocks}) => {
 	} else {
 		commonFormats = null
 	}
-	console.info('commonFormats', commonFormats)
+	// console.info('commonFormats', commonFormats)
 	// console.info('dummyText', dummyText, richText.toHTMLString({value: dummyText}))
 
 	const onTransformReady = (transform) => {
@@ -242,6 +286,14 @@ const MultiToolbar = ({blocks}) => {
 		>
 
 			<NavigableToolbar className="multi-edit-toolbar-wrapper" aria-label='Multi-Edit Tools'>
+				{ dummyBlock && 
+					<Fragment>
+						<BlockControls.Slot>
+							{(fills) => { console.info('BlockControls fills', fills); return fills }}
+						</BlockControls.Slot>
+						{ blockEdit }
+					</Fragment>
+				}
 				<Toolbar>
 					<ToolbarButton 
 						title = {`Merge ${blocks.length} blocks`}
@@ -278,12 +330,44 @@ const MultiToolbar = ({blocks}) => {
 }
 
 
+// import {__experimentalUseSlot as useSlot} from '@wordpress/components'
+import {useEffect} from '@wordpress/element'
+
+const MultiEditPlugin = () => {
+
+	// if new formats are registered after this plugin, rerun the wrapper.
+	const registeredFormatTypes = useSelect((select) =>
+		select('core/rich-text').getFormatTypes()
+	)
+	useEffect(() => {
+		console.info('transforming formats', registeredFormatTypes)
+		FORMATS_WRAP.forEach((f) =>
+			reregisterWithTransform(f, registeredFormatTypes)
+		)
+	}, [registeredFormatTypes]) // relying on reference equality (createSelector)
+
+	// run init stuff once
+	useEffect(() => {
+		addFilter(
+			'editor.BlockEdit',
+			'multi-edit/block-toolbar',
+			withMultiToolbar
+		)
+
+		const styleNode = document.createElement('style')
+		styleNode.id = 'multi-edit__styles'
+		styleNode.innerText = STYLE
+		document.head.appendChild(styleNode)
+	}, [])
+	return null
+}
+
+registerPlugin('multi-edit', {
+	render: MultiEditPlugin,
+})
 
 
-
-
-
-const withMultiToolbar = createHigherOrderComponent((BlockEdit) => (props) => {
+const withMultiToolbar = createHigherOrderComponent((BlockEdit) => ({isFakeBlockEdit = false, ...props}) => {
 	// props.isSelected ? && allowedBlocks.includes( props.name )
 	const {hasMultiSelection, blocks, firstId} = useSelect((select) => {
 		const s = select('core/block-editor')
@@ -294,7 +378,7 @@ const withMultiToolbar = createHigherOrderComponent((BlockEdit) => (props) => {
 		}
 	})
 
-	if (!hasMultiSelection || props.clientId !== firstId) {
+	if (isFakeBlockEdit || !hasMultiSelection || props.clientId !== firstId) {
 		// console.log('multi-edit/block-toolbar/render', '(skipped)')
 		return (
 			<BlockEdit {...props} />
@@ -309,15 +393,3 @@ const withMultiToolbar = createHigherOrderComponent((BlockEdit) => (props) => {
 	)
 }, 'withMultiToolbar')
 
-
-addFilter(
-	'editor.BlockEdit',
-	'multi-edit/block-toolbar',
-	withMultiToolbar
-)
-
-{
-	const styleNode = document.createElement('style')
-	styleNode.innerText = STYLE
-	document.head.appendChild(styleNode)
-}

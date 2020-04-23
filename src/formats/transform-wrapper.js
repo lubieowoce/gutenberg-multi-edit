@@ -36,11 +36,16 @@ export const editToTransform = ({name: formatName, edit: Edit}) => (
 	}
 )
 
-export const addTransform = (formatType) => (
-	_.set({...formatType}, 'getTransform', editToTransform(formatType))
-)
+export const addTransform = (formatType) => {
+	if ('getTransform' in formatType) { return formatType }
+	return _.set({...formatType}, 'getTransform', editToTransform(formatType))
+}
 
-export const reregisterWithTransform = (formatName) => {
+
+export const reregisterWithTransform = (formatName, formatTypes) => {
+	const _formatType = formatTypes[formatName]
+	if (!_formatType || 'getTransform' in _formatType) { return _formatType }
+
 	console.group(`reregistering '${formatName}'`)
 	const formatType = richText.unregisterFormatType(formatName)
 	let res = undefined

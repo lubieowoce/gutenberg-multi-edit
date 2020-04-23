@@ -35,7 +35,7 @@ export const FormatToolbar = ({formatTypes, activeFormats, onTransformReady, con
 								onTransformReady={onTransformReady}
 							/>
 						)
-					  }).map((el, i) => {console.info('GetTransform', i, el); return el})
+					  })//.map((el, i) => {console.info('GetTransform', i, el); return el})
 				}
 				{
 					// FORMATS PRIMARY use a different slot name so that they can
@@ -51,7 +51,7 @@ export const FormatToolbar = ({formatTypes, activeFormats, onTransformReady, con
 				}
 				<Slot name="RichText.ToolbarControls">
 					{ (fills) => {
-						console.info('fills:', fills)
+						// console.info('fills:', fills)
 						// these are the `RichTextToolbarButton`s the formats' `GetTransform`s returned  
 						const controlsFromFills = fills.map(([{props}]) => props)
 
