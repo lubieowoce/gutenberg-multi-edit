@@ -38,7 +38,7 @@ import {
 import {
 	NavigableToolbar,
 	AlignmentToolbar,
-	BlockControls,
+	// BlockControls,
 	// BlockFormatControls,
 	// RichTextToolbarButton,
 } from '@wordpress/block-editor'
@@ -51,6 +51,7 @@ import * as richText from '@wordpress/rich-text'
 
 import * as fmt from './format-utils'
 import {FormatToolbar} from './format-toolbar'
+import {MultiBlockControls} from './multi-block-controls'
 
 
 const commonAttribute = (blocks, attrPath) => {
@@ -64,6 +65,21 @@ const commonAttribute = (blocks, attrPath) => {
 		}
 	}
 	return [true, common]
+}
+
+
+const commonAttributes = (allAttrs) => {
+	const attrs = _.cloneDeep(allAttrs[0])
+	const allAttrNames = _.union(allAttrs.map(Object.keys))
+	for (const attr of allAttrNames) {
+		const [hasCommon, common] = commonAttribute(allAttrs, attr)
+		if (hasCommon) {
+			attrs[attr] = common
+		} else {
+			delete attrs[attr]
+		}
+	}
+	return attrs
 }
 
 const richTextSelected = (args) => {
@@ -119,8 +135,6 @@ const FORMATS_WHITELIST = [
 
 
 
-import {BlockEdit} from '@wordpress/block-editor'
-
 
 
 const MultiToolbar = ({blocks}) => {
@@ -159,50 +173,25 @@ const MultiToolbar = ({blocks}) => {
 
 	// TODO: recurse into innerBlocks
 
-	console.info(blocks)
+	const setAllAttributes = (update) => (
+		batchUpdateBlockAttributes(blocks.map(({clientId}) => [clientId, update]))
+	)
+
+
 	const [hasCommonName, maybeName] = commonAttribute(blocks, 'name')
-	let dummyBlock, blockEdit
+	let multiBlockControls = null
 	if (hasCommonName) {
 		const name = maybeName
-		const dummyAttrs = _.cloneDeep(blocks[0].attributes)
 		const allAttrs = blocks.map((b) => b.attributes)
-		const allAttrNames = _.union(allAttrs.map(Object.keys))
-		for (const attr of allAttrNames) {
-			const [hasCommon, common] = commonAttribute(allAttrs, attr)
-			if (hasCommon) {
-				dummyAttrs[attr] = common
-			} else {
-				delete dummyAttrs[attr]
-			}
-		}
-		// dummyBlock = createBlock(name, dummyAttrs)
-		dummyBlock = blocks[0]
-		console.info('dummyAttrs', dummyAttrs)
-
-		blockEdit = (
-			<BlockEdit
-				isFakeBlockEdit={true}
-				name={ name }
-				isSelected={ true }
-				attributes={ dummyAttrs }
-				setAttributes={ (update) => batchUpdateBlockAttributes(blocks.map(({clientId}) => [clientId, update])) }
-				// insertBlocksAfter={ isLocked ? undefined : onInsertBlocksAfter }
-				// onReplace={ isLocked ? undefined : onReplace }
-				// mergeBlocks={ isLocked ? undefined : onMerge }
-				clientId={ dummyBlock.clientId }
-				isSelectionEnabled={ false }
-				toggleSelection={ _.noop }
+		const commonAttrs = commonAttributes(allAttrs)
+		multiBlockControls = (
+			<MultiBlockControls
+				blockName={name}
+				attributes={commonAttrs}
+				setAttributes={setAllAttributes}
+				instanceBlock={blocks[0]}
 			/>
 		)
-		console.info('dummyBlock', dummyBlock)
-		console.info('dummyBlock (get)', wp.data.select('core/block-editor').getBlock(dummyBlock.clientId))
-		console.info('blockEdit', blockEdit)
-		blockEdit = <div style={ { display: 'none' } }>{ blockEdit }</div>;
-	} else {
-		dummyBlock = null
-		blockEdit = null
-		console.info('dummyBlock', dummyBlock)
-		console.info('blockEdit', blockEdit)
 	}
 
 
@@ -286,14 +275,7 @@ const MultiToolbar = ({blocks}) => {
 		>
 
 			<NavigableToolbar className="multi-edit-toolbar-wrapper" aria-label='Multi-Edit Tools'>
-				{ dummyBlock && 
-					<Fragment>
-						<BlockControls.Slot>
-							{(fills) => { console.info('BlockControls fills', fills); return fills }}
-						</BlockControls.Slot>
-						{ blockEdit }
-					</Fragment>
-				}
+
 				<Toolbar>
 					<ToolbarButton 
 						title = {`Merge ${blocks.length} blocks`}
@@ -303,6 +285,9 @@ const MultiToolbar = ({blocks}) => {
 						onClick = {() => mergeParagraphs(blocks, {replaceBlocks})}
 					/>
 				</Toolbar>
+				
+				{ multiBlockControls }
+
 
 				<AlignmentToolbar
 					value={align}
@@ -311,18 +296,19 @@ const MultiToolbar = ({blocks}) => {
 
 				{ anyRichTexts &&
 					<Fragment>
-						<FormatToolbar
-							formatTypes={allowedFormatTypes}
-							activeFormats={_.fromPairs(commonFormats.map((f)=>[f.type, f]))}
-							onTransformReady={onTransformReady}
-							controls={[{
-								icon: "editor-removeformatting",
-								title: "Clear Formatting",
-								onClick: onClearFormatting,
-							}]}
-						/>
+					<FormatToolbar
+						formatTypes={allowedFormatTypes}
+						activeFormats={_.fromPairs(commonFormats.map((f)=>[f.type, f]))}
+						onTransformReady={onTransformReady}
+						controls={[{
+							icon: "editor-removeformatting",
+							title: "Clear Formatting",
+							onClick: onClearFormatting,
+						}]}
+					/>
 					</Fragment>
 				}
+
 			</NavigableToolbar>
 
 		</Popover>
