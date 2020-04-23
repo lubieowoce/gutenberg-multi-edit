@@ -2,8 +2,6 @@ import {Fragment} from '@wordpress/element'
 import {BlockEdit, BlockControls} from '@wordpress/block-editor'
 import {noop} from 'lodash'
 
-/*eslint no-undef: "error"*/
-
 export const MultiBlockControls = ({blockName, attributes, setAttributes, instanceBlock}) => {
 	// hang the BlockEdit on an existing block to get the block type's BlockControls
 	const {name, clientId} = instanceBlock

@@ -13,7 +13,7 @@ const MORE_FORMATS_POPOVER_PROPS = {
 
 const FORMATS_PRIMARY = ['core/bold', 'core/italic', 'core/text-color']
 
-export const FormatToolbar = ({formatTypes, activeFormats, onTransformReady, controls: extraControls}) => {
+export const MultiFormatToolbar = ({formatTypes, activeFormats, onTransformReady, controls: extraControls}) => {
 	return (
 		<div className="block-editor-format-toolbar">
 			<Toolbar>

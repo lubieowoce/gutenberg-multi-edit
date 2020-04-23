@@ -50,7 +50,7 @@ import * as richText from '@wordpress/rich-text'
 // import * as icons from '@wordpress/icons'
 
 import * as fmt from './format-utils'
-import {FormatToolbar} from './format-toolbar'
+import {MultiFormatToolbar} from './multi-format-toolbar'
 import {MultiBlockControls} from './multi-block-controls'
 
 
@@ -285,7 +285,7 @@ const MultiToolbar = ({blocks}) => {
 						onClick = {() => mergeParagraphs(blocks, {replaceBlocks})}
 					/>
 				</Toolbar>
-				
+
 				{ multiBlockControls }
 
 
@@ -296,7 +296,7 @@ const MultiToolbar = ({blocks}) => {
 
 				{ anyRichTexts &&
 					<Fragment>
-					<FormatToolbar
+					<MultiFormatToolbar
 						formatTypes={allowedFormatTypes}
 						activeFormats={_.fromPairs(commonFormats.map((f)=>[f.type, f]))}
 						onTransformReady={onTransformReady}
