@@ -28,7 +28,7 @@ export const MultiBlockControls = ({blockName, attributes, setAttributes, instan
 					toggleSelection={ noop }
 				/>
 			</div>
-			<BlockControls.Slot>
+			<BlockControls.Slot bubblesVirtually>
 				{(fills) => { console.info('BlockControls fills', fills); return fills }}
 			</BlockControls.Slot>
 		</Fragment>

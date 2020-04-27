@@ -33,11 +33,13 @@ import {
 	Popover,
 	Toolbar,
 	ToolbarButton,
+	createSlotFill,
 } from '@wordpress/components'
 
 import {
 	NavigableToolbar,
 	AlignmentToolbar,
+	BlockIcon,
 	// BlockControls,
 	// BlockFormatControls,
 	// RichTextToolbarButton,
@@ -52,6 +54,7 @@ import * as richText from '@wordpress/rich-text'
 import * as fmt from './format-utils'
 import {MultiFormatToolbar} from './multi-format-toolbar'
 import {MultiBlockControls} from './multi-block-controls'
+
 
 
 const commonAttribute = (blocks, attrPath) => {
@@ -135,7 +138,18 @@ const FORMATS_WHITELIST = [
 
 
 
+import {PanelBody} from '@wordpress/components'
+import {InspectorControls} from '@wordpress/block-editor'
+import {PluginSidebar} from '@wordpress/edit-post'
+import {more as iconMore} from '@wordpress/icons'
+import {getBlockType} from '@wordpress/blocks'
 
+const SIDEBAR_NAME = 'inspector-sidebar'
+const {
+	Slot: SidebarContentsSlot,
+	Fill: SidebarContents,
+} = createSlotFill('MultiEdit.SidebarContents')
+SidebarContents.Slot = SidebarContentsSlot
 
 const MultiToolbar = ({blocks}) => {
 
@@ -151,7 +165,6 @@ const MultiToolbar = ({blocks}) => {
 	const allowedFormatTypes = (
 		allFormatTypes.filter(({name}) => FORMATS_WHITELIST.includes(name))
 	)
-
 
 	const batchUpdateBlockAttributes = (updates) => {
 		// will be undo-able wit a single Ctrl+Z
@@ -179,9 +192,10 @@ const MultiToolbar = ({blocks}) => {
 
 
 	const [hasCommonName, maybeName] = commonAttribute(blocks, 'name')
-	let multiBlockControls = null
+	let multiBlockControls, commonType = null
 	if (hasCommonName) {
 		const name = maybeName
+		commonType = getBlockType(name)
 		const allAttrs = blocks.map((b) => b.attributes)
 		const commonAttrs = commonAttributes(allAttrs)
 		multiBlockControls = (
@@ -258,8 +272,7 @@ const MultiToolbar = ({blocks}) => {
 		)
 	}
 
-
-	return (
+	return (<Fragment>
 		<Popover
 			noArrow 
 			animate = {true}
@@ -286,8 +299,9 @@ const MultiToolbar = ({blocks}) => {
 					/>
 				</Toolbar>
 
-				{ multiBlockControls }
-
+				<Toolbar>
+					{ multiBlockControls }
+				</Toolbar>
 
 				<AlignmentToolbar
 					value={align}
@@ -312,7 +326,38 @@ const MultiToolbar = ({blocks}) => {
 			</NavigableToolbar>
 
 		</Popover>
-	)
+
+		{ /*
+		the sidebar should be rendered from a plugin context,
+		so it's created in MultiEditPlugin, and here we're
+		just filling in the contents
+		*/ }
+		<SidebarContents>
+			<PanelBody>
+				{ commonType
+					? (
+						<div className="block-editor-block-card">
+							<BlockIcon icon={ commonType.icon } showColors />
+							<div className="block-editor-block-card__content">
+								<div className="block-editor-block-card__title">
+									{`${blocks.length} ${commonType.title} blocks selected`}
+								</div>
+								{/*<span className="block-editor-block-card__description">
+									{ blockType.description }
+								</span>*/}
+							</div>
+						</div>
+
+					)
+					: `${blocks.length} blocks selected`
+				}
+			</PanelBody>
+			{ multiBlockControls &&
+				<InspectorControls.Slot bubblesVirtually />
+			}
+		</SidebarContents>
+
+	</Fragment>)
 }
 
 
@@ -346,7 +391,25 @@ const MultiEditPlugin = () => {
 		styleNode.innerText = STYLE
 		document.head.appendChild(styleNode)
 	}, [])
-	return null
+	return (
+		<PluginSidebar
+			icon={ iconMore }
+			name={ SIDEBAR_NAME }
+			title="Multi-Edit block inspector"
+			>
+			<SidebarContents.Slot >
+				{ (fills) => 
+					(fills.length !== 0)
+						? fills
+						: (
+							<PanelBody>
+								No blocks selected.
+							</PanelBody>
+						)
+				}
+			</SidebarContents.Slot>
+		</PluginSidebar>
+	)
 }
 
 registerPlugin('multi-edit', {
@@ -371,12 +434,39 @@ const withMultiToolbar = createHigherOrderComponent((BlockEdit) => ({isFakeBlock
 			<BlockEdit {...props} />
 		)
 	}
+
+
 	// console.info('multi-edit/block-toolbar/render', blocks, blocks.map((b)=>b.clientId), firstId)
 	return (
 		<Fragment>
 			<BlockEdit {...props} />
-			<MultiToolbar {...props} blocks={blocks} />
+			<WithSwitchToSidebar name={`multi-edit/${SIDEBAR_NAME}`}>
+				<MultiToolbar {...props} blocks={blocks} />
+			</WithSwitchToSidebar>
 		</Fragment>
 	)
 }, 'withMultiToolbar')
 
+import {useState} from '@wordpress/element'
+
+const WithSwitchToSidebar = ({name, children}) => {
+	const {getActiveGeneralSidebarName} = useSelect((select) => select('core/edit-post'))
+	const {openGeneralSidebar} = useDispatch('core/edit-post')
+	const [originalSidebar,] = useState(getActiveGeneralSidebarName())
+
+	useEffect(() => {
+		// do nothing if there's no sidebar open
+		if (!originalSidebar) { return }
+
+		openGeneralSidebar(name)
+		// when the component is destroyed, restore previous sidebar
+		// (unless the user manually switched to another sidebar in the meantime)
+		return () => {
+			if (name === getActiveGeneralSidebarName()) {
+				openGeneralSidebar(originalSidebar)
+			}
+		}
+	}, [])
+
+	return <Fragment>{children}</Fragment>
+}
