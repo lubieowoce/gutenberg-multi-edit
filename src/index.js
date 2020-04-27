@@ -279,14 +279,11 @@ const MultiToolbar = ({blocks}) => {
 					/>
 				</Toolbar>
 
-				<Toolbar>
-					{ multiBlockControls }
-				</Toolbar>
-
-				<AlignmentToolbar
-					value={align}
-					onChange={setAligns}
-				/>
+				{
+					multiBlockControls
+						? <Toolbar> { multiBlockControls } </Toolbar>
+						: <AlignmentToolbar value={align} onChange={setAligns} />
+				}
 
 				{ anyRichTexts &&
 					<Fragment>
