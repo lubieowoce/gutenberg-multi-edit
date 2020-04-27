@@ -1,14 +1,17 @@
 
+import { DropdownMenu, Slot, Toolbar } from '@wordpress/components'
+import { RichTextToolbarButton } from '@wordpress/block-editor'
+import { Fragment, useCallback } from '@wordpress/element'
+// import * as _ from 'lodash'
+import { noop, sortBy, groupBy } from 'lodash'
 import { __ } from '@wordpress/i18n';
-import { DropdownMenu, Slot } from '@wordpress/components';
-import { Toolbar } from '@wordpress/components'
-import { Fragment } from '@wordpress/element'
-import * as _ from 'lodash'
 import { chevronDown } from '@wordpress/icons'
+
+import {ErrorBoundary} from './error-boundary'
 
 const MORE_FORMATS_POPOVER_PROPS = {
 	position: 'bottom right',
-	isAlternate: true,
+	// isAlternate: true,
 };
 
 const FORMATS_PRIMARY = ['core/bold', 'core/italic', 'core/text-color']
@@ -27,15 +30,16 @@ export const MultiFormatToolbar = ({formatTypes, activeFormats, onTransformReady
 						const isActive = formatId in activeFormats
 						const activeAttributes = isActive ? (activeFormats[formatId].attributes || {}) : {}
 						return (
-							<GetTransform
-								formatId={formatId}
-								key={formatId}
-								isActive={isActive}
-								activeAttributes={activeAttributes}
-								onTransformReady={onTransformReady}
-							/>
+							<WithFallbackFormatControl key={formatId} formatType={formatType}>
+								<GetTransform
+									isActive={isActive}
+									activeAttributes={activeAttributes}
+									onTransformReady={onTransformReady}
+									onFocus={noop}
+								/>
+							</WithFallbackFormatControl>
 						)
-					  })//.map((el, i) => {console.info('GetTransform', i, el); return el})
+					  })
 				}
 				{
 					// FORMATS PRIMARY use a different slot name so that they can
@@ -54,6 +58,13 @@ export const MultiFormatToolbar = ({formatTypes, activeFormats, onTransformReady
 						// console.info('fills:', fills)
 						// these are the `RichTextToolbarButton`s the formats' `GetTransform`s returned  
 						const controlsFromFills = fills.map(([{props}]) => props)
+						const {
+							control: controls,
+							fallback: fallbacks,
+						} = groupBy(
+							controlsFromFills,
+							({isFallback = false}) => isFallback ? 'fallback' : 'control'
+						)
 
 						return (
 							<Fragment>
@@ -62,8 +73,9 @@ export const MultiFormatToolbar = ({formatTypes, activeFormats, onTransformReady
 									icon={chevronDown}
 									controls={
 										[
-											_.sortBy(controlsFromFills, 'title'),
-											_.sortBy(extraControls, 'title'),
+											sortBy(controls, 'title'),
+											sortBy(fallbacks, 'title'),
+											sortBy(extraControls, 'title'),
 										]
 									}
 									popoverProps={MORE_FORMATS_POPOVER_PROPS}
@@ -78,3 +90,28 @@ export const MultiFormatToolbar = ({formatTypes, activeFormats, onTransformReady
 	)
 }
 
+const FallbackFormatControl = ({formatType: {title}}) => (
+	<RichTextToolbarButton
+		isFallback
+		icon="warning"
+		isDisabled
+		title={title}
+		onClick={noop}
+	/>
+)
+
+const WithFallbackFormatControl = ({formatType, children}) => {
+	const render = useCallback(
+		({hasError}) => (
+			!hasError
+				? children
+				: <FallbackFormatControl formatType={formatType} />
+		),
+		[formatType, children]
+	)
+	return (
+		<ErrorBoundary context={formatType}>
+			{ render }
+		</ErrorBoundary>
+	)
+}

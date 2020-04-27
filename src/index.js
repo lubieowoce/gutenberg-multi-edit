@@ -111,37 +111,15 @@ const RICHTEXT_ATTRS = {
 import {reregisterWithTransform} from './formats/transform-wrapper'
 import './formats/indent'
 
-const FORMATS_WRAP = [
-	"core/bold",
-	"core/italic",
-	"core/code",
-	"core/strikethrough",
-	"core/underline",
-	"core/text-color",
-	"editorskit/background",
-	"editorskit/subscript",
-	"editorskit/superscript",
-	"editorskit/uppercase",
-	// "editorskit/charmap",
+const FORMATS_DISABLED = [
+	"editorskit/clear-formatting",
 ]
 
-
-const FORMATS_TRANSFORMS = [
- 	...FORMATS_WRAP,
-	"custom/indent",
-]
-
-
-const FORMATS_WHITELIST = [
-	...FORMATS_TRANSFORMS
-]
-
-
-
+import {useMemo} from '@wordpress/element'
 import {PanelBody} from '@wordpress/components'
 import {InspectorControls} from '@wordpress/block-editor'
 import {PluginSidebar} from '@wordpress/edit-post'
-import {more as iconMore} from '@wordpress/icons'
+import {grid as iconGrid} from '@wordpress/icons'
 import {getBlockType} from '@wordpress/blocks'
 
 const SIDEBAR_NAME = 'inspector-sidebar'
@@ -162,9 +140,11 @@ const MultiToolbar = ({blocks}) => {
 	const allFormatTypes = useSelect((select) =>
 		select('core/rich-text').getFormatTypes()
 	)
-	const allowedFormatTypes = (
-		allFormatTypes.filter(({name}) => FORMATS_WHITELIST.includes(name))
-	)
+	const allowedFormatTypes = useMemo(() => (
+		allFormatTypes.filter(({name, object: usesReplacements = false}) =>
+			!FORMATS_DISABLED.includes(name) && !usesReplacements
+		)
+	), [allFormatTypes])
 
 	const batchUpdateBlockAttributes = (updates) => {
 		// will be undo-able wit a single Ctrl+Z
@@ -372,9 +352,11 @@ const MultiEditPlugin = () => {
 	)
 	useEffect(() => {
 		console.info('transforming formats', registeredFormatTypes)
-		const formatTypes = _.fromPairs(registeredFormatTypes.map((f) => [f.name, f]))
-		FORMATS_WRAP.forEach((f) =>
-			reregisterWithTransform(f, formatTypes)
+		const namesAndFormats = registeredFormatTypes.map((f) => [f.name, f])
+		const formatTypes = _.fromPairs(namesAndFormats)
+		// FORMATS_WRAP.forEach((f) =>
+		namesAndFormats.forEach(([name, _f]) =>
+			reregisterWithTransform(name, formatTypes)
 		)
 	}, [registeredFormatTypes]) // relying on reference equality (createSelector)
 
@@ -393,7 +375,7 @@ const MultiEditPlugin = () => {
 	}, [])
 	return (
 		<PluginSidebar
-			icon={ iconMore }
+			icon={ iconGrid }
 			name={ SIDEBAR_NAME }
 			title="Multi-Edit block inspector"
 			>
