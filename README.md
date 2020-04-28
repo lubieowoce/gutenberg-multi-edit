@@ -2,7 +2,7 @@
 
 **Edit multiple Gutenberg blocks at once!**
 
-This plugin is currently in alpha stage, expect it to crash and fail in weird ways. Feedback and contributions welcome!
+This plugin is currently in alpha stage. Most things should work fine, but they might also crash and fail in weird ways. Feedback and contributions welcome!
 
 *(some stuff changed since i made the gifs, but re-recording them is a hassle)*
 
@@ -27,8 +27,5 @@ Currently, multi-formatting only works for core blocks (paragraph, heading, quot
 git clone https://github.com/lubieowoce/gutenberg-multi-edit && cd gutenberg-multi-edit
 npm install && npm run build
 ```
-*<sup>i haven't actually tried it, so if it doesn't work, please let me know!</sup>*
 
-Then, copy `build` and `plugin.php` into `gutenberg-multi-edit` in your WP plugins folder. 
-
-*(hopefully i'll set up automated github releases soon)*
+Then, copy `build` and `plugin.php` into `gutenberg-multi-edit` in your WP plugins folder. *(i'll try to set up automated github releases soon to make this easier)*
