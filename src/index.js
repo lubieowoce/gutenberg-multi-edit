@@ -1,7 +1,7 @@
 console.info('multi-edit')
 
 import {registerPlugin} from '@wordpress/plugins'
-import {addFilter} from '@wordpress/hooks'
+import {addFilter, removeFilter} from '@wordpress/hooks'
 import {PluginBlockSettingsMenuItem} from '@wordpress/edit-post'
 import {Fragment, useEffect} from '@wordpress/element'
 import {useSelect, useDispatch} from '@wordpress/data'
@@ -38,16 +38,19 @@ const MultiEditPlugin = () => {
 
 	// run init stuff once
 	useEffect(() => {
+		console.info('adding', 'multi-edit/block-toolbar')
 		addFilter(
 			'editor.BlockEdit',
 			'multi-edit/block-toolbar',
 			withMultiToolbar
 		)
-
-		const styleNode = document.createElement('style')
-		styleNode.id = 'multi-edit__styles'
-		styleNode.innerText = MultiEdit.style
-		document.head.appendChild(styleNode)
+		return () => {
+			console.info('removing', 'multi-edit/block-toolbar')
+			removeFilter(
+				'editor.BlockEdit',
+				'multi-edit/block-toolbar'
+			)
+		}
 	}, [])
 	return <Sidebar/>
 }

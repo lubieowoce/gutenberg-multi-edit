@@ -1,5 +1,5 @@
 import * as _ from 'lodash'
-import {Fragment, useMemo} from '@wordpress/element'
+import {Fragment, useMemo, useState, useEffect} from '@wordpress/element'
 import {useSelect, useDispatch} from '@wordpress/data'
 import {getBlockType} from '@wordpress/blocks'
 import {
@@ -7,6 +7,7 @@ import {
 	Toolbar,
 	ToolbarButton,
 	PanelBody,
+	Button,
 } from '@wordpress/components'
 
 import {
@@ -18,6 +19,7 @@ import {
 	// BlockFormatControls,
 	// RichTextToolbarButton,
 } from '@wordpress/block-editor'
+import {Icon, check as iconCheck} from '@wordpress/icons'
 
 import * as richText from '@wordpress/rich-text'
 
@@ -48,12 +50,6 @@ const FORMATS_DISABLED = [
 
 
 
-const STYLE = `
-.multi-edit-toolbar-wrapper {
-	margin-bottom: 13px;
-	display: flex;
-}
-`
 export const MultiEdit = ({blocks}) => {
 
 	const {
@@ -91,28 +87,71 @@ export const MultiEdit = ({blocks}) => {
 
 	// TODO: recurse into innerBlocks
 
-	const setAllAttributes = (update) => (
-		batchUpdateBlockAttributes(blocks.map(({clientId}) => [clientId, update]))
+
+	const byType = _.groupBy(blocks, 'name')
+
+	let [selectedTypeName, setSelectedTypeName] = useState(null)
+
+	// fall back to no selected type if block selection changed
+	// and no blocks of type `selectedTypeName` are selected anymore
+	const didUnselect = selectedTypeName && !(selectedTypeName in byType)
+	if (didUnselect) {
+		selectedTypeName = null
+	}
+	useEffect(
+		() => { if (didUnselect) { setSelectedTypeName(null) } },
+		[didUnselect]
 	)
 
+	const selectedType = selectedTypeName ? getBlockType(selectedTypeName) : null
 
-	const [hasCommonName, maybeName] = commonAttribute(blocks, 'name')
-	let multiBlockControls, commonType = null
-	if (hasCommonName) {
-		const name = maybeName
-		commonType = getBlockType(name)
-		const allAttrs = blocks.map((b) => b.attributes)
+	const multiBlockControls = (({name}) => {
+		if (!name) { return null }
+		const typeBlocks = byType[name]
+		const setAllAttributes = (update) => (
+			batchUpdateBlockAttributes(typeBlocks.map(({clientId}) => [clientId, update]))
+		)
+		// selectedType = getBlockType(name)
+		const allAttrs = typeBlocks.map((b) => b.attributes)
 		const commonAttrs = commonAttributes(allAttrs)
-		multiBlockControls = (
+		return (
 			<MultiBlockControls
 				blockName={name}
 				attributes={commonAttrs}
 				setAttributes={setAllAttributes}
-				instanceBlock={blocks[0]}
+				instanceBlock={typeBlocks[0]}
 			/>
 		)
-	}
+	})({
+		name: selectedTypeName
+	})
 
+	const typePicker = (({selected, types, onSelect}) =>
+		<div className="multi-edit__type-picker">
+		{
+			types.map((typeName) => {
+				const type = getBlockType(typeName)
+				const isSelected = typeName === selected
+				return (
+					<Button
+						isActive={isSelected}
+						title={type.title}
+						onClick={() => onSelect(typeName)}
+						key={typeName}
+						className={"tab " + (isSelected ? "active" : "not-active")}
+						>
+						<BlockIcon icon={ type.icon } />
+					</Button>
+				)
+			})
+		}
+		</div>
+		
+	)({
+		selected: selectedTypeName,
+		types: Object.keys(byType),
+		onSelect: setSelectedTypeName
+	})
 
 	const [hasCommonAlign, maybeAlign] = commonAttribute(blocks, ['attributes', 'align'])
 	const align = hasCommonAlign ? maybeAlign : null
@@ -180,7 +219,7 @@ export const MultiEdit = ({blocks}) => {
 	return (<Fragment>
 		<BlockToolbarPopover>
 
-			<NavigableToolbar className="multi-edit-toolbar-wrapper" aria-label='Multi-Edit Tools'>
+			<NavigableToolbar className="multi-edit__toolbar-wrapper" aria-label='Multi-Edit Tools'>
 
 				<Toolbar>
 					<ToolbarButton 
@@ -194,7 +233,17 @@ export const MultiEdit = ({blocks}) => {
 
 				{
 					multiBlockControls
-						? <Toolbar> { multiBlockControls } </Toolbar>
+						? (
+							<Toolbar>
+								{ selectedType && 
+									<div className="components-toolbar__control multi-edit__type-icon">
+										<BlockIcon icon={selectedType.icon} />
+										<Icon icon={iconCheck}/>
+									</div>
+								}
+								{ multiBlockControls }
+							</Toolbar>
+						 )
 						: <AlignmentToolbar value={align} onChange={setAligns} />
 				}
 
@@ -224,33 +273,15 @@ export const MultiEdit = ({blocks}) => {
 		*/ }
 		<SidebarContents>
 			<PanelBody>
-				{ commonType
-					? (
-						<div className="block-editor-block-card">
-							<BlockIcon icon={ commonType.icon } showColors />
-							<div className="block-editor-block-card__content">
-								<div className="block-editor-block-card__title">
-									{`${blocks.length} ${commonType.title} blocks selected`}
-								</div>
-								{/*<span className="block-editor-block-card__description">
-									{ blockType.description }
-								</span>*/}
-							</div>
-						</div>
-
-					)
-					: `${blocks.length} blocks selected`
-				}
+				{`${blocks.length} blocks selected`}
 			</PanelBody>
-			{ multiBlockControls &&
-				<InspectorControls.Slot bubblesVirtually />
-			}
+			{ typePicker }
+			<InspectorControls.Slot bubblesVirtually />
 		</SidebarContents>
 
 	</Fragment>)
 }
 
-MultiEdit.style = STYLE
 
 
 const BlockToolbarPopover = ({children, ...props}) => (
@@ -297,6 +328,8 @@ const commonAttribute = (blocks, attrPath) => {
 
 
 const commonAttributes = (allAttrs) => {
+	if (allAttrs.length === 0) { return undefined }
+	if (allAttrs.length === 1) { return allAttrs[0] }
 	const attrs = _.cloneDeep(allAttrs[0])
 	const allAttrNames = _.union(allAttrs.map(Object.keys))
 	for (const attr of allAttrNames) {

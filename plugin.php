@@ -8,15 +8,24 @@
  */
 
 add_action('init', function () {
-    $asset_file = include(plugin_dir_path(__FILE__).'build/index.asset.php');
+    $script_asset = include(plugin_dir_path(__FILE__).'build/index.asset.php');
     wp_register_script(
         'gutenberg-multi-edit',
         plugins_url('build/index.js', __FILE__),
-        $asset_file['dependencies'],
-        $asset_file['version']
+        $script_asset['dependencies'],
+        $script_asset['version']
+    );
+
+    $style_asset = include(plugin_dir_path(__FILE__).'build/editor.asset.php');
+    wp_register_style(
+        'gutenberg-multi-edit-style',
+        plugins_url('build/editor.css', __FILE__),
+        [],
+        $style_asset['version']
     );
 });
  
 add_action('enqueue_block_editor_assets', function () {
     wp_enqueue_script('gutenberg-multi-edit');
+    wp_enqueue_style('gutenberg-multi-edit-style');
 });
