@@ -16,13 +16,15 @@ add_action('init', function () {
         $script_asset['version']
     );
 
-    $style_asset = include(plugin_dir_path(__FILE__).'build/editor.asset.php');
-    wp_register_style(
-        'gutenberg-multi-edit-style',
-        plugins_url('build/editor.css', __FILE__),
-        [],
-        $style_asset['version']
-    );
+    $style_asset = @include(plugin_dir_path(__FILE__).'build/editor.asset.php') ?? null;
+    if ($style_asset) {
+        wp_register_style(
+            'gutenberg-multi-edit-style',
+            plugins_url('build/editor.css', __FILE__),
+            [],
+            $style_asset['version']
+        );
+    }
 });
  
 add_action('enqueue_block_editor_assets', function () {

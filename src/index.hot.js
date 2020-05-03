@@ -1,4 +1,9 @@
-import {autoloadPlugins, registerPlugin} from 'block-editor-hmr'
+import {autoloadPlugins} from 'block-editor-hmr'
+
+import './editor.css'
+
+import './formats/indent'
+// import './misc/wp-icons-explorer'
 
 autoloadPlugins(
 	{
@@ -11,3 +16,4 @@ autoloadPlugins(
 		}
 	}
 )
+

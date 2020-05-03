@@ -12,12 +12,13 @@
   "author": "",
   "license": "GPL-3.0-or-later",
   "devDependencies": {
-    "eslint-plugin-react": "^7.19.0",
     "@wordpress/scripts": "^8.0.1",
+    "block-editor-hmr": "^0.6.0",
     "css-loader": "^3.5.3",
+    "eslint-plugin-react": "^7.19.0",
     "ignore-emit-webpack-plugin": "^2.0.2",
     "mini-css-extract-plugin": "^0.9.0",
-    "block-editor-hmr": "^0.6.0",
+    "style-loader": "^1.2.1",
     "webpack-dev-server": "^3.10.3"
   },
   "dependencies": {

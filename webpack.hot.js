@@ -4,7 +4,7 @@
 const {HotModuleReplacementPlugin} = require('webpack');
 
 const config = require(
-	'./webpack.common.js'
+	'@wordpress/scripts/config/webpack.config.js'
 );
 
 const port = parseInt(process.env.PORT, 10) || 3030;
@@ -45,27 +45,53 @@ const devHMR = {
 		},
 	},
 
+	// hot-load css with style-loader instead of MiniCSSExtractPlugin
+	module: {
+		rules: [
+			{
+				test: /\.css$/i,
+				exclude: /node_modules/,
+				use: [
+					'style-loader',
+					'css-loader',
+				],
+			},
+		],		
+	},
+
 	// HMR won't work without this
 	plugins: [
 		new HotModuleReplacementPlugin(),
 	],
 };
 
+const disabledPlugins = [
+	'LiveReloadPlugin',
+	// 'IgnoreEmitPlugin',
+]
 
 module.exports = {
 	...config,
 	...devHMR,
 	entry: {
-		...config.entry,
+		// ...config.entry,
 		index: './src/index.hot.js',
 	},
 	output: {
 		...config.output,
-		...devHMR.output,		
+		...devHMR.output,
+	},
+	module: {
+		...config.module,
+		...devHMR.module,
+		rules: [
+			...config.module.rules,
+			...devHMR.module.rules,
+		],
 	},
 	plugins: [
 		...config.plugins.filter((p) =>
-			p.constructor.name !== 'LiveReloadPlugin'
+			!disabledPlugins.includes(typeof p === 'object' ? p.constructor.name : p)
 		),
 		...devHMR.plugins,
 	],
