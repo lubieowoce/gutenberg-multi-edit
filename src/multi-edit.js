@@ -6,28 +6,26 @@ import {
 	Popover,
 	Toolbar,
 	ToolbarButton,
-	PanelBody,
+	Card, CardBody,
 	Button,
 } from '@wordpress/components'
 
 import {
+	BlockControls,
 	InspectorControls,
 	NavigableToolbar,
 	AlignmentToolbar,
 	BlockIcon,
-	// BlockControls,
-	// BlockFormatControls,
-	// RichTextToolbarButton,
 } from '@wordpress/block-editor'
-import {Icon, check as iconCheck} from '@wordpress/icons'
+import {Icon} from '@wordpress/icons'
 
 import * as richText from '@wordpress/rich-text'
 
 import * as fmt from './format-utils'
 import {MultiFormatToolbar} from './multi-format-toolbar'
-import {MultiBlockControls} from './multi-block-controls'
+import {MultiBlockEdit} from './multi-block-edit'
 import {SidebarContents} from './sidebar'
-
+import {selectMultiple} from './icons'
 
 const RICHTEXT_ATTRS = {
 	'core/paragraph':    {attribute: 'content'},
@@ -51,7 +49,6 @@ const FORMATS_DISABLED = [
 
 
 export const MultiEdit = ({blocks}) => {
-
 	const {
 		replaceBlocks,
 		updateBlockAttributes,
@@ -88,70 +85,64 @@ export const MultiEdit = ({blocks}) => {
 	// TODO: recurse into innerBlocks
 
 
-	const byType = _.groupBy(blocks, 'name')
+	const blocksByType = _.groupBy(blocks, 'name')
 
 	let [selectedTypeName, setSelectedTypeName] = useState(null)
 
-	// fall back to no selected type if block selection changed
-	// and no blocks of type `selectedTypeName` are selected anymore
-	const didUnselect = selectedTypeName && !(selectedTypeName in byType)
-	if (didUnselect) {
-		selectedTypeName = null
+	{
+		let overrideSelected = undefined
+
+		// if only one type is selected, pick it
+		const typesInSelection = Object.keys(blocksByType)
+		if (typesInSelection.length === 1) {
+			overrideSelected = typesInSelection[0]
+		}
+		// fall back to no selected type if block selection changed
+		// and no blocks of type `selectedTypeName` are selected anymore
+		if (selectedTypeName && !(selectedTypeName in blocksByType)) {
+			overrideSelected = null
+		}
+
+		if (overrideSelected !== undefined) {
+			selectedTypeName = overrideSelected
+		}
+		useEffect(() => {
+			if (overrideSelected !== undefined) {
+				setSelectedTypeName(overrideSelected)
+			}
+		}, [overrideSelected])
 	}
-	useEffect(
-		() => { if (didUnselect) { setSelectedTypeName(null) } },
-		[didUnselect]
-	)
+
 
 	const selectedType = selectedTypeName ? getBlockType(selectedTypeName) : null
 
-	const multiBlockControls = (({name}) => {
-		if (!name) { return null }
-		const typeBlocks = byType[name]
+	let multiBlockEdit = null
+	if (selectedTypeName) {
+		const name = selectedTypeName
+		const typeBlocks = blocksByType[name]
 		const setAllAttributes = (update) => (
 			batchUpdateBlockAttributes(typeBlocks.map(({clientId}) => [clientId, update]))
 		)
 		// selectedType = getBlockType(name)
 		const allAttrs = typeBlocks.map((b) => b.attributes)
 		const commonAttrs = commonAttributes(allAttrs)
-		return (
-			<MultiBlockControls
-				blockName={name}
+		multiBlockEdit = (
+			<MultiBlockEdit
+				name={name}
 				attributes={commonAttrs}
 				setAttributes={setAllAttributes}
 				instanceBlock={typeBlocks[0]}
 			/>
 		)
-	})({
-		name: selectedTypeName
-	})
+	}
 
-	const typePicker = (({selected, types, onSelect}) =>
-		<div className="multi-edit__type-picker">
-		{
-			types.map((typeName) => {
-				const type = getBlockType(typeName)
-				const isSelected = typeName === selected
-				return (
-					<Button
-						isActive={isSelected}
-						title={type.title}
-						onClick={() => onSelect(typeName)}
-						key={typeName}
-						className={"tab " + (isSelected ? "active" : "not-active")}
-						>
-						<BlockIcon icon={ type.icon } />
-					</Button>
-				)
-			})
-		}
-		</div>
-		
-	)({
-		selected: selectedTypeName,
-		types: Object.keys(byType),
-		onSelect: setSelectedTypeName
-	})
+	const typePicker = (
+		<TypePicker
+			selected={selectedTypeName}
+			types={Object.keys(blocksByType)}
+			onSelect={setSelectedTypeName}
+		/>
+	)
 
 	const [hasCommonAlign, maybeAlign] = commonAttribute(blocks, ['attributes', 'align'])
 	const align = hasCommonAlign ? maybeAlign : null
@@ -162,6 +153,8 @@ export const MultiEdit = ({blocks}) => {
 		)
 	}
 	
+
+
 	const blockMaybeTexts = blocks.map(({name, attributes}) => {
 		const attr = RICHTEXT_ATTRS[name]
 		if (!attr) { return null }
@@ -217,38 +210,53 @@ export const MultiEdit = ({blocks}) => {
 	}
 
 	return (<Fragment>
+
+		{ multiBlockEdit }
+
 		<BlockToolbarPopover>
+			<NavigableToolbar
+				aria-label='Multi-Edit Tools'
+				className="multi-edit__toolbar-wrapper block-editor-block-toolbar"
+				>
 
-			<NavigableToolbar className="multi-edit__toolbar-wrapper" aria-label='Multi-Edit Tools'>
-
-				<Toolbar>
-					<ToolbarButton 
-						title = {`Merge ${blocks.length} blocks`}
-						icon = 'editor-insertmore'
-						// isActive = {blocks.every((b) => b.name === 'core/paragraph')}
-						isDisabled = {blocks.some((b) => b.name !== 'core/paragraph')}
-						onClick = {() => mergeParagraphs(blocks, {replaceBlocks})}
-					/>
-				</Toolbar>
-
-				{
-					multiBlockControls
-						? (
+				{ (multiBlockEdit)
+					? (
+						<Fragment>
 							<Toolbar>
 								{ selectedType && 
 									<div className="components-toolbar__control multi-edit__type-icon">
 										<BlockIcon icon={selectedType.icon} />
-										<Icon icon={iconCheck}/>
+										<span className="indicator-icon"><Icon icon={selectMultiple}/></span>
 									</div>
 								}
-								{ multiBlockControls }
 							</Toolbar>
-						 )
-						: <AlignmentToolbar value={align} onChange={setAligns} />
+							{ blocks.every((b) => b.name === 'core/paragraph') &&
+								<Toolbar>
+									<ToolbarButton 
+										title = {`Merge ${blocks.length} paragraphs`}
+										icon = 'editor-insertmore'
+										// isActive = {blocks.every((b) => b.name === 'core/paragraph')}
+										onClick = {() => mergeParagraphs(blocks, {replaceBlocks})}
+									/>
+								</Toolbar>
+							}
+
+							<BlockControls.Slot
+								bubblesVirtually
+								className="block-editor-block-toolbar__slot"
+							/>
+							
+						 </Fragment>
+					 )
+					: (
+						<AlignmentToolbar
+							value={align}
+							onChange={setAligns}
+						/>
+					)
 				}
 
 				{ anyRichTexts &&
-					<Fragment>
 					<MultiFormatToolbar
 						formatTypes={allowedFormatTypes}
 						activeFormats={_.fromPairs(commonFormats.map((f)=>[f.type, f]))}
@@ -259,11 +267,9 @@ export const MultiEdit = ({blocks}) => {
 							onClick: onClearFormatting,
 						}]}
 					/>
-					</Fragment>
 				}
 
 			</NavigableToolbar>
-
 		</BlockToolbarPopover>
 
 		{ /*
@@ -272,11 +278,17 @@ export const MultiEdit = ({blocks}) => {
 		just filling in the contents
 		*/ }
 		<SidebarContents>
-			<PanelBody>
-				{`${blocks.length} blocks selected`}
-			</PanelBody>
-			{ typePicker }
-			<InspectorControls.Slot bubblesVirtually />
+			<div className="block-editor-block-inspector">
+				<Card>
+					<CardBody>
+						{`${blocks.length} blocks selected`}
+					</CardBody>
+				</Card>
+				{ typePicker }
+
+				<InspectorControls.Slot bubblesVirtually />
+
+			</div>
 		</SidebarContents>
 
 	</Fragment>)
@@ -297,10 +309,32 @@ const BlockToolbarPopover = ({children, ...props}) => (
 		__unstableSlotName = "block-toolbar"
 		// __unstableSticky true,
 		// __unstableBoundaryParent true,
+		{...props}
 		>
 		{children}
 	</Popover>
+)
 
+
+const TypePicker = ({types, selected, onSelect}) => (
+	<div className="multi-edit__type-picker">
+		{ types.map((typeName) => {
+			const type = getBlockType(typeName)
+			const isSelected = typeName === selected
+			return (
+				<Button
+					isActive={isSelected}
+					title={type.title}
+					onClick={() => onSelect(typeName)}
+					key={typeName}
+					className={"tab " + (isSelected ? "active" : "not-active")}
+					>
+					<BlockIcon icon={ type.icon } />
+				</Button>
+			)
+		})
+		}
+	</div>
 )
 
 

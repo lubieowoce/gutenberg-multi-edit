@@ -16,7 +16,6 @@ export {SidebarContents}
 
 export const Sidebar = () => (
 	<PluginSidebar
-		icon={ iconGrid }
 		name={ SIDEBAR_NAME }
 		title="Multi-Edit block inspector"
 		>

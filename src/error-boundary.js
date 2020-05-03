@@ -13,12 +13,13 @@ export class ErrorBoundary extends Component {
 		if (onError) {
 			onError({context, error, errorInfo})
 		}
-		this.setState({hasError: true, error})
+		this.setState({hasError: true, error, errorInfo})
 	}
 
 	render() {
 		const {children: renderChild, context} = this.props
-		const {hasError, error} = this.state
-		return renderChild({hasError, error, context})
+		const {hasError, error, errorInfo} = this.state
+		const resetError = () => this.setState({hasError: false, error: null})
+		return renderChild({hasError, error, errorInfo, resetError, context})
 	}
 }

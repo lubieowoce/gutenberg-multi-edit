@@ -26,6 +26,7 @@
         "object-shorthand": "warn",
         "no-nested-ternary": "off",
         "no-shadow": "warn",
+        "no-undef-init": "warn",
         "no-console": "warn"
     }
 }

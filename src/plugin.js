@@ -2,7 +2,7 @@ console.info('multi-edit')
 
 import '@wordpress/plugins'
 import {addFilter, removeFilter} from '@wordpress/hooks'
-import {PluginBlockSettingsMenuItem} from '@wordpress/edit-post'
+// import {PluginBlockSettingsMenuItem} from '@wordpress/edit-post'
 import {Fragment, useEffect} from '@wordpress/element'
 import {useSelect, useDispatch} from '@wordpress/data'
 import {createHigherOrderComponent} from '@wordpress/compose'
@@ -10,14 +10,14 @@ import {createHigherOrderComponent} from '@wordpress/compose'
 import * as _ from 'lodash'
 
 import {reregisterWithTransform} from './formats/transform-wrapper'
-import './formats/indent'
-import {Sidebar, SIDEBAR_NAME} from './sidebar'
+import {Sidebar, SidebarContents, SIDEBAR_NAME} from './sidebar'
 import {MultiEdit} from './multi-edit'
+import {ErrorBoundary} from './error-boundary'
+import {selectMultiple} from './icons'
 
-// import './misc/wp-icons-explorer'
 
 
-const MultiEditPlugin = () => {
+const Plugin = () => {
 	// if new formats are registered after this plugin, rerun the wrapper.
 	const registeredFormatTypes = useSelect((select) =>
 		select('core/rich-text').getFormatTypes()
@@ -53,7 +53,8 @@ const MultiEditPlugin = () => {
 
 export const name = 'multi-edit'
 export const settings = {
-	render: MultiEditPlugin,
+	icon: <Icon icon={selectMultiple} />,
+	render: Plugin,
 }
 
 
@@ -75,19 +76,82 @@ const withMultiToolbar = createHigherOrderComponent((BlockEdit) => ({isFakeBlock
 		)
 	}
 
-
 	// console.info('multi-edit/block-toolbar/render', blocks, blocks.map((b)=>b.clientId), firstId)
 	return (
 		<Fragment>
 			<BlockEdit {...props} />
-			<WithSwitchToSidebar name={`multi-edit/${SIDEBAR_NAME}`}>
-				<MultiEdit {...props} blocks={blocks} />
-			</WithSwitchToSidebar>
+			<WithErrorDisplay>
+				<WithSwitchToSidebar name={`multi-edit/${SIDEBAR_NAME}`}>
+					<MultiEdit {...props} blocks={blocks} />
+				</WithSwitchToSidebar>
+			</WithErrorDisplay>
+
 		</Fragment>
 	)
 }, 'withMultiToolbar')
 
 
+const WithErrorDisplay = ({children}) => (
+	<ErrorBoundary>
+		{({hasError, ...errorProps}) => {
+			if (!hasError) {
+				return children
+			}
+			return (
+				<SidebarContents>
+					<ErrorPanel {...errorProps}/>
+				</SidebarContents>
+			)
+		}
+		}
+	</ErrorBoundary>
+)
+
+import {
+	Card, CardHeader, CardBody,
+	Icon,
+	Button,
+	Popover,
+} from '@wordpress/components'
+
+const ErrorPanel = ({error, errorInfo, resetError}) => {
+	const [hasPopover, setHasPopover] = useState(false)
+	const togglePopover = () => setHasPopover(!hasPopover)
+	const hidePopover = () => setHasPopover(false)
+	return (
+		<Fragment>
+			<Card>
+				<CardHeader>
+					<div style={{display: 'flex', alignItems: 'center'}}>
+						<Icon icon="warning" style={{marginRight: '4px'}}/>
+						<h3 style={{margin: 0}}>Error</h3>
+					</div>
+				</CardHeader>
+				<CardBody>
+					The plugin has encountered an error and was disabled.
+					<div style={{marginTop: '16px', display: 'flex', justifyContent: 'space-between'}}>
+						<Button isSecondary icon="update" onClick={resetError}>
+							Try Again
+						</Button>
+						<Button isTertiary onClick={togglePopover}>
+							Show details
+							{ hasPopover &&
+								<Popover position="middle left" onFocusOutside={hidePopover}>
+									{/*<PanelBody icon="editor-code" title="Error details" initialOpen={true}>*/}
+									<code style={{display: 'block', whiteSpace: 'pre'}}>
+										{`${error}`}
+										{`\n${error.fileName.replace(window.location, '')}:${error.lineNumber}:${error.columnNumber}`}
+										{errorInfo.componentStack}
+									</code>
+								</Popover>
+							}
+						</Button>
+					</div>
+				</CardBody>
+			</Card>
+		</Fragment>
+	)
+}
 
 import {useState} from '@wordpress/element'
 
